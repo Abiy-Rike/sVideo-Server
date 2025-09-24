@@ -4,7 +4,7 @@ const WebSocket = require("ws");
 const PORT = process.env.PORT || 10000;
 const wss = new WebSocket.Server({ port: PORT, host: "0.0.0.0" });
 
-// Map: roomId -> Map<userId, WebSocket>
+// Map: roomId -> Map<userId, WebSocket>kgj
 const rooms = new Map();
 
 wss.on("connection", (ws) => {
