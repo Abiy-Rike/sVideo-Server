@@ -1,20 +1,21 @@
-// Simple WebRTC signaling server using WebSocket (ws)
+// Simple WebRTC signaling server with rooms
 const WebSocket = require("ws");
 
-const PORT = process.env.PORT || 10000; // Render provides PORT
+const PORT = process.env.PORT || 10000;
 const wss = new WebSocket.Server({ port: PORT, host: "0.0.0.0" });
 
-// 🔑 Keep track of rooms and users
-const rooms = new Map(); // roomId -> Map(userId -> ws)
+// Map: roomId -> Map<userId, WebSocket>
+const rooms = new Map();
 
 wss.on("connection", (ws) => {
   let userId = null;
   let roomId = null;
 
+  console.log("🌐 New WebSocket connection");
+
   ws.on("message", (data) => {
     try {
       const msg = JSON.parse(data);
-
       switch (msg.type) {
         case "join-room": {
           userId = msg.from;
@@ -23,21 +24,19 @@ wss.on("connection", (ws) => {
           if (!rooms.has(roomId)) rooms.set(roomId, new Map());
           const room = rooms.get(roomId);
 
-          // send back list of existing users
+          // Send back list of existing users
           const existingUsers = Array.from(room.keys());
-          ws.send(
-            JSON.stringify({ type: "existing-users", users: existingUsers })
-          );
+          ws.send(JSON.stringify({ type: "existing-users", users: existingUsers }));
 
-          // notify existing users about the new user
+          // Notify existing users of the new user
           room.forEach((client, id) => {
             if (client.readyState === WebSocket.OPEN) {
               client.send(JSON.stringify({ type: "user-joined", from: userId }));
             }
           });
 
-          // add user to the room
           room.set(userId, ws);
+          console.log(`✅ ${userId} joined room ${roomId}`);
           break;
         }
 
@@ -49,6 +48,7 @@ wss.on("connection", (ws) => {
           const target = room.get(msg.to);
           if (target && target.readyState === WebSocket.OPEN) {
             target.send(JSON.stringify(msg));
+            console.log(`➡️ Forwarded ${msg.type} from ${msg.from} to ${msg.to}`);
           }
           break;
         }
@@ -72,15 +72,19 @@ wss.on("connection", (ws) => {
       const room = rooms.get(roomId);
       if (room) {
         room.delete(userId);
+        console.log(`👋 ${userId} left room ${roomId}`);
 
-        // notify remaining users
-        room.forEach((client) => {
+        // Notify remaining users
+        room.forEach((client, id) => {
           if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ type: "user-left", from: userId }));
           }
         });
 
-        if (room.size === 0) rooms.delete(roomId);
+        if (room.size === 0) {
+          rooms.delete(roomId);
+          console.log(`🗑️ Room ${roomId} deleted (empty)`);
+        }
       }
     }
   }
